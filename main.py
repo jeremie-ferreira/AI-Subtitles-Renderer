@@ -1,6 +1,5 @@
 import json
 import subprocess
-import sys
 import argparse
 from renderer import Renderer
 import cv2
@@ -24,6 +23,9 @@ def group_words(words, max):
             and words[i + 1]["start"] - words[i]["end"] > 0.001
         )
 
+        if i < len(words) - 1 and words[i + 1]["word"][0] not in ["'", "-"]:
+            count += 1
+
         # Group after max words, a sentence ending, or a noticeable pause
         if count == max or sentence_ending or next_pause:
             grouped_words.append({
@@ -34,19 +36,19 @@ def group_words(words, max):
             })
             current_group = []
             count = 0
-        else:
-            count += 1
+            
     return grouped_words
 
 # Generate subtitles for a video
-def main(input_video, output_video, subtitles_json, style):
+def process_video(input_video, output_video, subtitles_json, style):
     # Load subtitles
     words = load_subtitles_from_json(subtitles_json)
     grouped_words = group_words(words, 5)
 
     # Load the input video
     cap = cv2.VideoCapture(input_video)
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -83,19 +85,15 @@ def main(input_video, output_video, subtitles_json, style):
 
     # Merge the original audio with the new video
     final_output = output_video
-    command = ["ffmpeg", "-y", "-i", temp_video, "-i", input_video, "-c:v", "copy", "-c:a", "aac", "-map", "0:v:0", "-map", "1:a:0", final_output]
+    command = ["ffmpeg", "-y", "-i", temp_video, "-i", input_video, '-r', str(fps), "-c:v", "copy", "-c:a", "aac", "-map", "0:v:0", "-map", "1:a:0", final_output]
     subprocess.run(command)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("Usage: python script.py <input_video> <output_video> <subtitles_json>")
-        sys.exit(1)
-
     parser = argparse.ArgumentParser(description="Add subtitles to your video")
     parser.add_argument("input_video", help="Input video path")
     parser.add_argument("output_video", help="Output video path")
-    parser.add_argument("subtitles_json", help="Subtitle JSON file path")
-    parser.add_argument("--style", default="hustle", help="Subtitle style (hustle, phantom)")
+    parser.add_argument("subtitles_json", help="Transcription with timestamps")
+    parser.add_argument("--style", default="spectre", help="Subtitle style (spectre, vibe...)")
     
     args = parser.parse_args()
-    main(args.input_video, args.output_video, args.subtitles_json, args.style)
+    process_video(args.input_video, args.output_video, args.subtitles_json, args.style)
